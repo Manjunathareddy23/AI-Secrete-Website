@@ -2,23 +2,17 @@ import streamlit as st
 import subprocess
 import os
 
-def run_wav2lip_inference(face_path, audio_path, output_path):
-    inference_py_path = "./Wav2Lip/inference.py"
-    checkpoint_path = "./checkpoints/wav2lip.pth"
-    
+
+def run_wav2lip(face_path, audio_path, output_path):
     cmd = [
-        "python", inference_py_path,
-        "--checkpoint_path", checkpoint_path,
+        "python", "./Wav2Lip/inference.py",
+        "--checkpoint_path", "./checkpoints/wav2lip.pth",  # your trained checkpoint
         "--face", face_path,
         "--audio", audio_path,
-        "--outfile", output_path
+        "--outfile", output_path,
     ]
-    st.write("Running command:", " ".join(cmd))
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        st.error(f"Wav2Lip inference failed:\n{result.stderr}")
-        return False
-    return True
+    print("Running command:", " ".join(cmd))
+    subprocess.run(cmd, check=True)
 
 def main():
     st.title("Wav2Lip Lip Sync Demo")
