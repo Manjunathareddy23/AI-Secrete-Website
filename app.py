@@ -2,34 +2,24 @@ import streamlit as st
 import subprocess
 import os
 
+st.title("SadTalker Video Generator")
 
-def run_wav2lip(face_path, audio_path, output_path):
-    cmd = [
-        "python", "./Wav2Lip/inference.py",
-        "--checkpoint_path", "./checkpoints/wav2lip.pth",  # your trained checkpoint
-        "--face", face_path,
-        "--audio", audio_path,
-        "--outfile", output_path,
-    ]
-    print("Running command:", " ".join(cmd))
-    subprocess.run(cmd, check=True)
+uploaded_image = st.file_uploader("Upload face image", type=["jpg", "png"])
+input_text = st.text_area("Enter text")
 
-def main():
-    st.title("Wav2Lip Lip Sync Demo")
-    
-    face_file = st.file_uploader("Upload face video/image", type=["mp4", "jpg", "png"])
-    audio_file = st.file_uploader("Upload audio", type=["wav", "mp3"])
-    
-    if face_file and audio_file:
-        with open("input_face.mp4", "wb") as f:
-            f.write(face_file.getbuffer())
-        with open("input_audio.wav", "wb") as f:
-            f.write(audio_file.getbuffer())
-            
-        output_path = "result.mp4"
-        if st.button("Generate Lip-Synced Video"):
-            if run_wav2lip_inference("input_face.mp4", "input_audio.wav", output_path):
-                st.video(output_path)
+if st.button("Generate Talking Video") and uploaded_image and input_text:
+    image_path = "input.jpg"
+    output_path = "output"
 
-if __name__ == "__main__":
-    main()
+    with open(image_path, "wb") as f:
+        f.write(uploaded_image.read())
+
+    cmd = ["bash", "run_sadtalker.sh", image_path, input_text, output_path]
+    subprocess.run(cmd)
+
+    result_video = os.path.join(output_path, "input_000.mp4")
+    if os.path.exists(result_video):
+        st.success("Video generated!")
+        st.video(result_video)
+    else:
+        st.error("Video generation failed.")
