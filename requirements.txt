@@ -2,3 +2,5 @@ streamlit
 requests
 python-dotenv
 gtts
+cv2
+torch
