@@ -1,25 +1,34 @@
-import streamlit as st
+import gradio as gr
 import subprocess
 import os
-#app
-st.title("SadTalker Video Generator")
 
-uploaded_image = st.file_uploader("Upload face image", type=["jpg", "png"])
-input_text = st.text_area("Enter text")
-
-if st.button("Generate Talking Video") and uploaded_image and input_text:
+def generate_video(image, text):
+    # Save uploaded image
     image_path = "input.jpg"
     output_path = "output"
-
     with open(image_path, "wb") as f:
-        f.write(uploaded_image.read())
+        f.write(image.read())
 
-    cmd = ["bash", "run_sadtalker.sh", image_path, input_text, output_path]
+    # Run shell script
+    cmd = ["bash", "run_sadtalker.sh", image_path, text, output_path]
     subprocess.run(cmd)
 
     result_video = os.path.join(output_path, "input_000.mp4")
     if os.path.exists(result_video):
-        st.success("Video generated!")
-        st.video(result_video)
+        return result_video
     else:
-        st.error("Video generation failed.")
+        return "Video generation failed or not found."
+
+interface = gr.Interface(
+    fn=generate_video,
+    inputs=[
+        gr.Image(type="file", label="Upload Face Image"),
+        gr.Textbox(lines=2, label="Enter Text to Speak")
+    ],
+    outputs=gr.Video(label="Generated Talking Video"),
+    title="SadTalker: Talking Face Generator",
+    description="Upload a face image and input text to generate a lip-synced talking video."
+)
+
+if __name__ == "__main__":
+    interface.launch()
