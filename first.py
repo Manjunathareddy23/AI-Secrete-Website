@@ -1,22 +1,17 @@
 import streamlit as st
-import requests
-import base64
-import time
-import os
 from gtts import gTTS
-from dotenv import load_dotenv
+import os
+import subprocess
+import tempfile
+import base64
 
-# Load environment variables
-load_dotenv()
-DID_API_KEY = os.getenv("DID_API_KEY")
+# Configure Streamlit page
+st.set_page_config(page_title="AI Talking Avatar (Local Wav2Lip)", layout="centered")
 
-st.set_page_config(page_title="AI Talking Avatar", layout="centered")
-
-# === Tailwind CSS Injection ===
+# Tailwind CSS injection (optional for style)
 tailwind_css = """
 <style>
 @import url('https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css');
-
 body {
     background: linear-gradient(145deg, #1e293b, #0f172a);
     font-family: 'Segoe UI', sans-serif;
@@ -57,98 +52,78 @@ body {
 """
 st.markdown(tailwind_css, unsafe_allow_html=True)
 
-# === Sidebar ===
+# Sidebar language selection
 with st.sidebar:
     st.header("🔧 Configuration")
     language = st.selectbox("🔤 TTS Language", ["en", "hi", "te", "ta", "ml", "bn", "gu", "kn", "mr", "ur"], index=0)
 
-# === Title ===
-st.markdown("<div class='text-4xl font-bold text-center mb-4'>🎙️ AI Talking Avatar Generator</div>", unsafe_allow_html=True)
-st.markdown("<p class='text-center mb-6'>Upload a photo, enter text, and generate a lifelike speaking avatar using gTTS + D-ID APIs.</p>", unsafe_allow_html=True)
+# Title and instructions
+st.markdown("<div class='text-4xl font-bold text-center mb-4'>🎙️ AI Talking Avatar Generator (Local)</div>", unsafe_allow_html=True)
+st.markdown("<p class='text-center mb-6'>Upload a face image, enter text, and generate a talking avatar video locally using gTTS + Wav2Lip.</p>", unsafe_allow_html=True)
 
-# === Upload UI with glassmorphism ===
+# Upload image and enter text
 with st.container():
     st.markdown("<div class='glass-box'>", unsafe_allow_html=True)
     uploaded_image = st.file_uploader("📷 Upload a Face Image (.jpg/.jpeg/.png)", type=["jpg", "jpeg", "png"])
-    input_text = st.text_area("📝 Enter the text you want the avatar to say")
+    input_text = st.text_area("📝 Enter the text for the avatar to say")
     generate_btn = st.button("🚀 Generate Talking Avatar")
     st.markdown("</div>", unsafe_allow_html=True)
 
+def save_temp_file(uploaded_file, suffix):
+    """Save uploaded file temporarily."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
+        tmp_file.write(uploaded_file.read())
+        return tmp_file.name
+
+def run_wav2lip_inference(face_path, audio_path, output_path, checkpoint_path="checkpoints/wav2lip.pth"):
+    """Run Wav2Lip inference using subprocess call."""
+    cmd = [
+        "python", "inference.py",
+        "--checkpoint_path", checkpoint_path,
+        "--face", face_path,
+        "--audio", audio_path,
+        "--outfile", output_path
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"Wav2Lip inference failed:\n{result.stderr}")
+
 if generate_btn:
-    if not uploaded_image or not input_text:
+    if not uploaded_image or not input_text.strip():
         st.warning("Please upload an image and enter some text.")
-    elif not DID_API_KEY:
-        st.error("❌ D-ID API key not found. Please add it to the .env file.")
-        st.stop()
     else:
-        # === gTTS Audio Generation ===
-        with st.spinner("🎧 Generating audio using gTTS..."):
+        with st.spinner("🎧 Generating speech audio..."):
             try:
+                # Save audio file temporarily
                 tts = gTTS(text=input_text, lang=language)
-                audio_path = "output_audio.mp3"
-                tts.save(audio_path)
+                audio_temp_path = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3").name
+                tts.save(audio_temp_path)
             except Exception as e:
-                st.error(f"❌ gTTS failed to generate audio: {str(e)}")
+                st.error(f"Error generating audio: {e}")
                 st.stop()
 
-        # === D-ID Video Generation ===
-        with st.spinner("📡 Uploading to D-ID and generating video..."):
-            image_data = uploaded_image.read()
-            image_b64 = base64.b64encode(image_data).decode("utf-8")
-            with open(audio_path, "rb") as audio_file:
-                audio_b64 = base64.b64encode(audio_file.read()).decode("utf-8")
+        with st.spinner("🧠 Running Wav2Lip inference..."):
+            try:
+                # Save uploaded image temporarily
+                face_temp_path = save_temp_file(uploaded_image, suffix=".png")
 
-            did_url = "https://api.d-id.com/talks"
-            headers = {
-                "Authorization": f"Basic {DID_API_KEY}",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "script": {
-                    "type": "audio",
-                    "audio": audio_b64
-                },
-                "source": {
-                    "type": "image",
-                    "image": image_b64
-                },
-                "config": {
-                    "fluent": True,
-                    "pad_audio": 0.2
-                }
-            }
+                # Output video path (temporary)
+                output_video_path = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4").name
 
-            response = requests.post(did_url, headers=headers, json=payload)
-            if response.status_code != 200:
-                st.error("❌ D-ID API failed.")
+                # Run Wav2Lip inference locally
+                run_wav2lip_inference(face_temp_path, audio_temp_path, output_video_path)
+
+            except Exception as e:
+                st.error(str(e))
                 st.stop()
 
-            talk_id = response.json()["id"]
-
-            # Poll for video result
-            for _ in range(20):
-                status_res = requests.get(f"https://api.d-id.com/talks/{talk_id}", headers=headers)
-                result = status_res.json()
-                if result.get("result_url"):
-                    video_url = result["result_url"]
-                    break
-                time.sleep(2)
-            else:
-                st.error("❌ Timed out waiting for video.")
-                st.stop()
-
-            video_data = requests.get(video_url).content
-            video_path = "talking_avatar.mp4"
-            with open(video_path, "wb") as f:
-                f.write(video_data)
-
-        # === Display Video with Animation ===
+        # Display video
         st.markdown("<div class='glass-box animated-container text-center'>", unsafe_allow_html=True)
-        st.video(video_path)
-        st.markdown("<p class='mt-4 text-xl text-green-300 font-semibold'>✅ Video Successfully Generated!</p>", unsafe_allow_html=True)
+        st.video(output_video_path)
+        st.markdown("<p class='mt-4 text-xl text-green-300 font-semibold'>✅ Video successfully generated!</p>", unsafe_allow_html=True)
 
-        # === Download Button ===
-        with open(video_path, "rb") as f:
+        # Provide download link
+        with open(output_video_path, "rb") as f:
             video_bytes = f.read()
             b64 = base64.b64encode(video_bytes).decode()
             download_link = f'<a class="download-btn mt-4 inline-block" href="data:video/mp4;base64,{b64}" download="talking_avatar.mp4">📥 Download Video</a>'
