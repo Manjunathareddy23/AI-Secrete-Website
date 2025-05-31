@@ -4,6 +4,11 @@ import base64
 import time
 import os
 from gtts import gTTS
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+DID_API_KEY = os.getenv("DID_API_KEY")
 
 st.set_page_config(page_title="AI Talking Avatar", layout="centered")
 
@@ -55,7 +60,6 @@ st.markdown(tailwind_css, unsafe_allow_html=True)
 # === Sidebar ===
 with st.sidebar:
     st.header("🔧 Configuration")
-    did_api_key = st.text_input("D-ID API Key", type="password")
     language = st.selectbox("🔤 TTS Language", ["en", "hi", "te", "ta", "ml", "bn", "gu", "kn", "mr", "ur"], index=0)
 
 # === Title ===
@@ -73,8 +77,9 @@ with st.container():
 if generate_btn:
     if not uploaded_image or not input_text:
         st.warning("Please upload an image and enter some text.")
-    elif not did_api_key:
-        st.warning("Please enter your D-ID API key in the sidebar.")
+    elif not DID_API_KEY:
+        st.error("❌ D-ID API key not found. Please add it to the .env file.")
+        st.stop()
     else:
         # === gTTS Audio Generation ===
         with st.spinner("🎧 Generating audio using gTTS..."):
@@ -95,7 +100,7 @@ if generate_btn:
 
             did_url = "https://api.d-id.com/talks"
             headers = {
-                "Authorization": f"Basic {did_api_key}",
+                "Authorization": f"Basic {DID_API_KEY}",
                 "Content-Type": "application/json"
             }
             payload = {
