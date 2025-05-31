@@ -1,7 +1,7 @@
 import streamlit as st
 import subprocess
 import os
-
+#app
 st.title("SadTalker Video Generator")
 
 uploaded_image = st.file_uploader("Upload face image", type=["jpg", "png"])
